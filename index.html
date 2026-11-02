@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description"
+        content="MapFlow — A focused UX improvement prototype for the OpenStreetMap search-to-directions workflow." />
+    <title>MapFlow — Focused Destination &amp; Route Assistant</title>
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="src/style.css" />
+
+    <!-- Google Font: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+                },
+            },
+        };
+    </script>
+</head>
+
+<body class="bg-gray-50 font-sans text-gray-900 min-h-screen flex flex-col">
+
+    <!-- ========== HEADER ========== -->
+    <header class="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between flex-shrink-0 z-10">
+        <div class="flex items-center gap-3">
+            <!-- Logo / Icon -->
+            <div class="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                        d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l5.447 2.724A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                </svg>
+            </div>
+            <div>
+                <h1 class="text-lg font-bold leading-tight text-gray-900">MapFlow</h1>
+                <p class="text-xs text-gray-500">Focused Destination &amp; Route Assistant</p>
+            </div>
+        </div>
+        <p class="text-xs text-gray-400 hidden sm:block">
+            UX Improvement Prototype &middot;
+            Benchmark: <a href="https://www.openstreetmap.org" target="_blank" rel="noopener"
+                class="underline hover:text-blue-600">OpenStreetMap</a>
+        </p>
+    </header>
+
+    <!-- ========== MAIN LAYOUT ========== -->
+    <main class="flex-1 flex flex-col lg:flex-row overflow-hidden">
+
+        <!-- ========== SIDEBAR ========== -->
+        <aside
+            class="w-full lg:w-[420px] xl:w-[460px] flex-shrink-0 bg-white border-r border-gray-200 flex flex-col overflow-hidden order-2 lg:order-1">
+
+            <!-- Workflow Step Indicator -->
+            <div class="px-5 pt-4 pb-2 border-b border-gray-100">
+                <div class="flex items-center justify-between text-xs text-gray-500 mb-2">
+                    <span>Search</span><span>Select</span><span>Directions</span><span>Route</span>
+                </div>
+                <div class="flex items-center gap-1">
+                    <div class="step-dot active" title="Search"></div>
+                    <div class="flex-1 h-0.5 bg-gray-200"></div>
+                    <div class="step-dot" title="Select"></div>
+                    <div class="flex-1 h-0.5 bg-gray-200"></div>
+                    <div class="step-dot" title="Directions"></div>
+                    <div class="flex-1 h-0.5 bg-gray-200"></div>
+                    <div class="step-dot" title="Route"></div>
+                </div>
+            </div>
+
+            <!-- Scrollable Content -->
+            <div class="flex-1 overflow-y-auto sidebar-scroll px-5 py-4">
+
+                <!-- Search Input -->
+                <section aria-label="Search for a destination">
+                    <label for="search-input" class="block text-sm font-semibold text-gray-700 mb-1.5">
+                        Find a Destination
+                    </label>
+                    <div class="relative">
+                        <input type="text" id="search-input" placeholder="Search for a destination..."
+                            autocomplete="off" class="w-full border border-gray-300 rounded-lg pl-10 pr-4 py-2.5 text-sm
+                     focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
+                     placeholder-gray-400" />
+                        <!-- Search icon -->
+                        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none"
+                            stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <circle cx="11" cy="11" r="8" />
+                            <path d="M21 21l-4.35-4.35" />
+                        </svg>
+                    </div>
+                </section>
+
+                <!-- Loading Indicator -->
+                <div id="loading-indicator"
+                    class="hidden flex items-center gap-3 mt-6 justify-center text-sm text-gray-500">
+                    <div class="spinner"></div>
+                    <span>Loading destinations...</span>
+                </div>
+
+                <!-- Fetch Error Indicator -->
+                <div id="error-indicator" class="hidden mt-6 text-center">
+                    <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                        <p class="text-sm text-red-700 font-medium">Unable to load destinations.</p>
+                        <p class="text-xs text-red-500 mt-1">Please check your connection and try again.</p>
+                        <button id="retry-btn"
+                            class="mt-3 px-4 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 transition">
+                            Retry
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Empty State -->
+                <div id="empty-state" class="hidden mt-6 text-center py-6">
+                    <svg class="w-12 h-12 text-gray-300 mx-auto mb-3" fill="none" stroke="currentColor"
+                        stroke-width="1.5" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                    </svg>
+                    <p class="text-sm font-medium text-gray-500">No destinations found.</p>
+                    <p class="text-xs text-gray-400 mt-1">Try another search term.</p>
+                </div>
+
+                <!-- Search Results -->
+                <div id="search-results" class="mt-4" role="list" aria-label="Search results">
+                    <!-- Dynamically populated by JS -->
+                </div>
+
+                <!-- ===== Destination Confirmation Panel ===== -->
+                <section id="confirm-panel" class="hidden mt-4" aria-label="Destination confirmation">
+                    <div class="bg-green-50 border border-green-200 rounded-xl p-5">
+                        <div class="flex items-center gap-2 mb-3">
+                            <span class="w-6 h-6 bg-green-600 rounded-full flex items-center justify-center">
+                                <svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" stroke-width="3"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                                </svg>
+                            </span>
+                            <h2 class="text-sm font-bold text-green-800">Destination Selected</h2>
+                        </div>
+                        <h3 id="confirm-name" class="text-lg font-bold text-gray-900"></h3>
+                        <p id="confirm-category" class="text-xs text-blue-600 mt-0.5"></p>
+                        <p id="confirm-address" class="text-sm text-gray-600 mt-1"></p>
+
+                        <div class="flex flex-wrap gap-3 mt-5">
+                            <button id="change-destination-btn" class="px-4 py-2 bg-white border border-gray-300 text-sm font-medium text-gray-700 rounded-lg
+                             hover:bg-gray-50 transition">
+                                Change Destination
+                            </button>
+                            <button id="get-directions-btn" class="px-5 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg
+                             hover:bg-blue-700 shadow-sm shadow-blue-200 transition flex items-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                </svg>
+                                Get Directions
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ===== Route Setup Form ===== -->
+                <section id="route-panel" class="hidden mt-4" aria-label="Route planning">
+                    <div class="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+                        <h2 class="text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
+                            <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" stroke-width="2"
+                                viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                    d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l5.447 2.724A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                            </svg>
+                            Plan Your Route
+                        </h2>
+
+                        <form id="route-form" novalidate>
+                            <!-- From -->
+                            <div class="mb-4">
+                                <label for="from-input"
+                                    class="block text-sm font-medium text-gray-700 mb-1">From</label>
+                                <div class="relative">
+                                    <input type="text" id="from-input"
+                                        placeholder="e.g. Current Location, Majestic, Koramangala…" autocomplete="off"
+                                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm
+                             focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                                    <!-- Autocomplete suggestions dropdown -->
+                                    <div id="from-suggestions" class="autocomplete-dropdown hidden"></div>
+                                </div>
+                                <button type="button" id="use-location-btn"
+                                    class="mt-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 transition flex items-center gap-1">
+                                    📍 Use My Location
+                                </button>
+                                <p id="from-error" class="field-error"></p>
+                            </div>
+
+                            <!-- To -->
+                            <div class="mb-4">
+                                <label for="to-input" class="block text-sm font-medium text-gray-700 mb-1">To</label>
+                                <input type="text" id="to-input" readonly
+                                    class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-700" />
+                                <p id="to-error" class="field-error"></p>
+                            </div>
+
+                            <!-- Travel Mode -->
+                            <div class="mb-5">
+                                <p class="text-sm font-medium text-gray-700 mb-2">Travel Mode</p>
+                                <div class="flex gap-2">
+                                    <button type="button"
+                                        class="mode-btn flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium
+                                               text-gray-700 bg-white hover:bg-gray-50 transition flex items-center justify-center gap-1.5"
+                                        data-mode="walking" aria-label="Walking">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2"
+                                            viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round"
+                                                d="M15 11l-3 3m0 0l-3-3m3 3V4m0 16a8 8 0 100-16 8 8 0 000 16z" />
+                                        </svg>
+                                        Walking
+                                    </button>
+                                    <button type="button"
+                                        class="mode-btn flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium
+                                               text-gray-700 bg-white hover:bg-gray-50 transition flex items-center justify-center gap-1.5"
+                                        data-mode="driving" aria-label="Driving">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2"
+                                            viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round"
+                                                d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0H18.75m-2.25-9l-3-4.5H7.5L4.5 9m15.75 0H3.375" />
+                                        </svg>
+                                        Driving
+                                    </button>
+                                    <button type="button"
+                                        class="mode-btn flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium
+                                               text-gray-700 bg-white hover:bg-gray-50 transition flex items-center justify-center gap-1.5"
+                                        data-mode="cycling" aria-label="Cycling">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2"
+                                            viewBox="0 0 24 24">
+                                            <circle cx="6" cy="18" r="3" />
+                                            <circle cx="18" cy="18" r="3" />
+                                            <path d="M6 18L12 6l6 12" />
+                                        </svg>
+                                        Cycling
+                                    </button>
+                                </div>
+                                <p id="mode-error" class="field-error"></p>
+                            </div>
+
+                            <!-- Submit -->
+                            <button type="submit" id="plan-route-btn" class="w-full py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg
+                             hover:bg-blue-700 shadow-sm shadow-blue-200 transition">
+                                Plan Route
+                            </button>
+                        </form>
+                    </div>
+                </section>
+
+                <!-- ===== Route Summary ===== -->
+                <section id="summary-panel" class="hidden mt-4 mb-6" aria-label="Route summary">
+                    <div class="bg-blue-50 border border-blue-200 rounded-xl p-5">
+                        <div class="flex items-center gap-2 mb-4">
+                            <span class="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center">
+                                <svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" stroke-width="3"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                                </svg>
+                            </span>
+                            <h2 class="text-sm font-bold text-blue-800">Route Ready</h2>
+                        </div>
+
+                        <div class="space-y-2 text-sm">
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">From</span>
+                                <span id="summary-from" class="font-medium text-gray-900 text-right"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Destination</span>
+                                <span id="summary-dest" class="font-medium text-gray-900 text-right"></span>
+                            </div>
+                            <hr class="border-blue-100" />
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Travel Mode</span>
+                                <span id="summary-mode" class="font-medium text-gray-900"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Distance</span>
+                                <span id="summary-dist" class="font-semibold text-blue-700"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Estimated Time</span>
+                                <span id="summary-time" class="font-semibold text-blue-700"></span>
+                            </div>
+                        </div>
+
+                        <p class="text-xs text-gray-400 mt-3 italic">
+                            Note: Route values are illustrative prototype data.
+                        </p>
+
+                        <div class="flex flex-wrap gap-3 mt-4">
+                            <button id="start-nav-btn" class="px-5 py-2 bg-green-600 text-white text-sm font-semibold rounded-lg
+                             hover:bg-green-700 transition flex items-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                        d="M5.636 5.636a9 9 0 1012.728 0M12 3v9" />
+                                </svg>
+                                Start Navigation
+                            </button>
+                            <button id="new-search-btn" class="px-4 py-2 bg-white border border-gray-300 text-sm font-medium text-gray-700 rounded-lg
+                             hover:bg-gray-50 transition">
+                                New Search
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+            </div><!-- /sidebar-scroll -->
+        </aside>
+
+        <!-- ========== MAP AREA ========== -->
+        <div class="flex-1 relative order-1 lg:order-2 min-h-[300px] lg:min-h-0">
+            <div id="map" class="absolute inset-0 lg:rounded-none"></div>
+
+            <!-- Map attribution overlay -->
+            <div
+                class="absolute bottom-2 left-2 bg-white/80 backdrop-blur-sm text-xs text-gray-500 px-2 py-1 rounded z-[500] pointer-events-none">
+                Prototype map &middot; Tiles &copy; OpenStreetMap contributors
+            </div>
+        </div>
+
+    </main>
+
+    <!-- ========== FOOTER ========== -->
+    <footer class="bg-gray-900 text-gray-400 text-xs px-4 py-3 flex-shrink-0">
+        <div class="flex items-center justify-between max-w-7xl mx-auto">
+            <p><strong class="text-white">MapFlow</strong> — UX Improvement Prototype</p>
+            <p>Benchmark: <a href="https://www.openstreetmap.org" target="_blank" rel="noopener"
+                    class="underline hover:text-white">OpenStreetMap</a></p>
+        </div>
+    </footer>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed bottom-0 right-0 z-[9999] p-4 flex flex-col gap-2 items-end"></div>
+
+    <!-- App Script -->
+    <script src="src/script.js"></script>
+</body>
+
+</html>
